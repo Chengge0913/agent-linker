@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+out/
+results/
+dashboard-url.txt
+dashboard-status.json
+dashboard-status.json.lock
+*.log
+dsh-credential-overlay.yml
