@@ -22,6 +22,10 @@ When the scripts change, update every installed copy; a stale copy is a differen
 
 ## The shared queue
 
+For related parallel tasks, choose one unique group ID (for example a UUID) and pass the same `--group <id>` to each `publish` command. This keeps the workers' tasks in one collaboration record in the dashboard, including after completion. Omit `--group` for independent tasks.
+
+Before publishing DSH or WB tasks, start the dashboard and floating progress window for the exact database and results directory: `python src/sidebar.py --db <database-path> --output-dir <results-directory> --hud --no-open`. Open the returned private URL in the Codex in-app browser immediately; if unavailable, open it in the default browser and report a failure if neither opens. Do not substitute `--no-open` alone for actually opening the page. Keep both available while work runs and use the same paths for every worker. DSH and WB also accept `--open-sidebar` to open it in the default browser. A failed dashboard launch must be reported to the user; do not claim the user can see live progress until it is open.
+
 From the directory of these scripts, use the same absolute database path for every command:
 
 ```powershell
@@ -99,12 +103,12 @@ The worker atomically claims one pending WB task, launches CodeBuddy, streams co
 
 ```powershell
 python src/queue.py --db <database-path> publish dsh <brief-path>
-python -u src/workers/dsh.py --db <database-path> --output-dir <results-directory> --patch <overlay-path> --model-label <desktop-model-label>
+python -u src/workers/dsh.py --db <database-path> --output-dir <results-directory> --patch <overlay-path>
 ```
 
-DSH is a headless CLI session. Launch it through `DeepSeek Harness.exe --expose-internals` pointing at `dsh-desktop-host/lib/cli.js`. `workers/dsh.py` takes `--cli` from `$DSH_CLI` (or an explicit `--cli`) and derives `--entrypoint` from it, so a standard Windows install only needs the environment variable or the option. The shipped `headless` profile disables credential storage, so `workers/dsh.py` requires `--patch` pointing to an overlay that enables the `credentials`, `authorization` and `deepseek-account` components and adds the model route. The overlay is environment-specific: prepare it yourself and never commit secret values; without it the worker fails with a missing-credential error, and you must not ask the user to paste keys into the conversation.
+DSH is a headless CLI session. Launch it through `DeepSeek Harness.exe --expose-internals` pointing at `dsh-desktop-host/lib/cli.js`. `workers/dsh.py` takes `--cli` from `$DSH_CLI` (or an explicit `--cli`) and derives `--entrypoint` from it, and falls back to the known local installation `D:/Deepseek Harness/DeepSeek Harness.exe` when the environment variable is absent. `--cli` and `DSH_CLI` override this fallback. The shipped `headless` profile disables credential storage, so `workers/dsh.py` requires `--patch` pointing to an overlay that enables the `credentials`, `authorization` and `deepseek-account` components and adds the model route. For this installation use the existing `dsh-credential-overlay.yml` in the installed skill directory when it exists. The overlay is environment-specific: never commit secret values; without it the worker fails with a missing-credential error, and you must not ask the user to paste keys into the conversation.
 
-Read-only is the default (`--permission-mode read-only`); use `--permission-mode workspace-write` only for a task whose file edits the user explicitly authorized, and still review what actually changed. `--model-label` records the model the route was configured to use; it is not proof of the serving model. The events are written to `events.raw.jsonl` and `events.jsonl`; the endpoint is a headless CLI session, not the Codex or DSH desktop conversation the user sees.
+Read-only is the default (`--permission-mode read-only`); use `--permission-mode workspace-write` only for a task whose file edits the user explicitly authorized, and still review what actually changed. For a recognized simple `agent-default-model` overlay, the worker automatically records the configured provider and model and the dashboard marks it as configuration. If the route cannot be recognized it displays unrecorded; do not guess. `--model-label` is an optional explicit configured label, not proof of the serving model. The events are written to `events.raw.jsonl` and `events.jsonl`; the endpoint is a headless CLI session, not the Codex or DSH desktop conversation the user sees.
 
 ### Echo (`workers/echo.py`)
 
@@ -134,3 +138,9 @@ The worker processes one task per invocation; it is not a background polling ser
 `delivered` means a report was returned and the worker reported completion; it is not independent acceptance. Inspect the report, events and actual changes before claiming success. Reports and event logs may contain task data; keep them appropriately private.
 
 The verified WB integration uses the standalone CodeBuddy CLI; it does not prove WorkBuddy desktop displays the session. The verified DSH integration uses the headless CLI; it does not prove the desktop application behaves the same.
+
+Store collaboration task databases and worker output under the installed skill's logs directory (for example logs/tasks.sqlite and logs/results). Use the same paths for the dashboard and workers. Preserve previous records and keep task data local.
+
+
+The `--hud` startup option opens one HUD per queue before publishing tasks. Close it using the × at its bottom; the window can be dragged. A later startup can reopen it.
+

@@ -12,6 +12,17 @@ from pathlib import Path
 
 
 class ProgressViewTests(unittest.TestCase):
+    def test_related_tasks_keep_group_after_completion(self):
+        first = self.queue('publish', 'dsh', str(self.brief), '--group', 'collab-1')
+        second = self.queue('publish', 'wb', str(self.brief), '--group', 'collab-1')
+        self.queue('claim', 'dsh')
+        self.queue('finish', 'dsh', first['id'], 'done')
+        self.queue('claim', 'wb')
+        self.queue('finish', 'wb', second['id'], 'done')
+        rows = json.loads(self.snapshot().stdout)
+        self.assertEqual([row['group_id'] for row in rows], ['collab-1', 'collab-1'])
+        self.assertEqual([row['state'] for row in rows], ['delivered', 'delivered'])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -38,6 +38,7 @@ def main():
     parser.add_argument('--model', default='glm-5.3')
     parser.add_argument('--timeout', type=int, default=300)
     parser.add_argument('--cwd', type=Path, default=Path.cwd())
+    parser.add_argument('--open-sidebar', action='store_true', help='Open the activity dashboard when a task starts')
     parser.add_argument('--allow-edits', action='store_true', help='Enable file editing for an explicitly authorized task')
     parser.add_argument('--allow-bash-command', action='append', default=[], metavar='COMMAND',
                         help='Allow one exact, explicitly authorized Bash command; repeat for additional commands')
@@ -54,6 +55,13 @@ def main():
         progress(None, 'idle')
         return 0
     task_id = task['id']
+    if args.open_sidebar:
+        try:
+            sys.path.insert(0, str(HERE.parent))
+            from sidebar import ensure_sidebar
+            ensure_sidebar(db=args.db, output_dir=args.output_dir, open_browser=True)
+        except Exception as exc:
+            print(f'could not open the activity sidebar: {exc}', file=sys.stderr)
     folder = args.output_dir / task_id
     timer = None
     process = None

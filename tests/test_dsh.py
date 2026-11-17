@@ -12,6 +12,36 @@ from pathlib import Path
 
 
 class DshWorkerTests(unittest.TestCase):
+    def test_cli_discovery_uses_installed_path_without_environment(self):
+        sys.path.insert(0, str(SRC / 'workers'))
+        from dsh import discover_cli
+        with tempfile.TemporaryDirectory() as directory:
+            installed = Path(directory) / 'DeepSeek Harness.exe'
+            installed.touch()
+            self.assertEqual(discover_cli({}, [installed]), installed)
+            self.assertIsNone(discover_cli({}, [installed.parent / 'missing.exe']))
+            self.assertEqual(discover_cli({'DSH_CLI': 'custom.exe'}, [installed]), Path('custom.exe'))
+
+    def test_model_route_reads_simple_overlay_and_rejects_missing_route(self):
+        sys.path.insert(0, str(SRC / 'workers'))
+        from dsh import overlay_model_route
+        with tempfile.TemporaryDirectory() as directory:
+            patch = Path(directory) / 'overlay.yml'
+            patch.write_text('- id: agent-default-model\n  config:\n    provider: qwen-token-plan-cn\n    model: deepseek-v4.1-flash\n', encoding='utf-8')
+            self.assertEqual(overlay_model_route(patch), ('qwen-token-plan-cn', 'deepseek-v4.1-flash'))
+            patch.write_text('- id: something-else\n  config:\n    model: other\n', encoding='utf-8')
+            self.assertIsNone(overlay_model_route(patch))
+
+    def test_electron_asar_entrypoint_is_accepted_when_archive_exists(self):
+        sys.path.insert(0, str(SRC / 'workers'))
+        from dsh import valid_entrypoint
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / 'app.asar'
+            entry = archive / 'dsh' / 'cli.js'
+            self.assertFalse(valid_entrypoint(entry))
+            archive.write_bytes(b'archive')
+            self.assertTrue(valid_entrypoint(entry))
+            self.assertFalse(valid_entrypoint(Path(directory) / 'missing.js'))
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

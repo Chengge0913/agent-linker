@@ -77,6 +77,10 @@ def snapshot(db, output_dir):
         connection.row_factory = sqlite3.Row
         tasks = [dict(row) for row in connection.execute(
             "SELECT id, worker, brief, state, receipt FROM tasks ORDER BY rowid DESC LIMIT 30")]
+        has_groups = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_groups'").fetchone()
+        groups = dict(connection.execute('SELECT task_id, group_id FROM task_groups')) if has_groups else {}
+        for task in tasks:
+            task['group_id'] = groups.get(task['id'])
     finally:
         connection.close()
     for task in tasks:

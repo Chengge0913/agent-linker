@@ -1,5 +1,6 @@
 """Claim one DSH task and run it through the headless profile."""
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -7,8 +8,41 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import runtime
 
-DEFAULT_CLI = Path(os.environ['DSH_CLI']) if os.environ.get('DSH_CLI') else None
+def discover_cli(environ, candidates=None):
+    if environ.get('DSH_CLI'):
+        return Path(environ['DSH_CLI'])
+    if candidates is None:
+        candidates = [Path('D:/Deepseek Harness/DeepSeek Harness.exe')]
+    return next ( (path for path in candidates if path.is_file()), None)
+
+
 ENTRY_SUFFIX = Path('resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js')
+
+
+def overlay_model_route(path):
+    """Recognize a simple agent-default-model entry; never guess complex YAML."""
+    try:
+        text = path.read_text(encoding='utf-8-sig')
+    except (OSError, UnicodeError):
+        return None
+    blocks = re.split(r'(?m)^- id:\s*', text)
+    for block in blocks[1:]:
+        lines = block.splitlines()
+        if not lines or lines[0].strip() != 'agent-default-model':
+            continue
+        matches = re.fullmatch(
+            r'\s*config:\s*\n[ \t]+provider:[ \t]*([A-Za-z0-9_.-]+)[ \t]*\n[ \t]+model:[ \t]*([A-Za-z0-9_.-]+)[ \t]*',
+            '\n'.join(lines[1:]))
+        if matches:
+            return matches.group(1), matches.group(2)
+    return None
+
+
+def valid_entrypoint(path):
+    if path.is_file():
+        return True
+    return any(parent.name.lower().endswith('.asar') and parent.is_file()
+               for parent in path.parents)
 
 
 class DshAdapter(runtime.Adapter):
@@ -18,8 +52,8 @@ class DshAdapter(runtime.Adapter):
 
     def configure(self, parser):
         parser.add_argument('--patch', required=True, type=Path, help='DSH overlay patch that supplies credentials')
-        parser.add_argument('--cli', type=Path, default=DEFAULT_CLI,
-                            help='DeepSeek Harness executable (default: $DSH_CLI)')
+        parser.add_argument('--cli', type=Path, default=discover_cli(os.environ),
+                            help='DeepSeek Harness executable (default: DSH_CLI, then known install path)')
         parser.add_argument('--entrypoint', type=Path, default=None,
                             help='cli.js entrypoint (default: derived from --cli)')
         parser.add_argument('--model-label', default=None, help='Configured model label; not proof of the serving model')
@@ -32,10 +66,14 @@ class DshAdapter(runtime.Adapter):
             parser.error('DSH CLI not found; pass --cli (or set DSH_CLI) pointing to the DeepSeek Harness executable')
         if args.entrypoint is None:
             args.entrypoint = args.cli.parent / ENTRY_SUFFIX
-        if not args.entrypoint.is_file():
+        if not valid_entrypoint(args.entrypoint):
             parser.error(f'DSH entrypoint not found at {args.entrypoint}; pass --entrypoint pointing to cli.js')
         if not args.patch.is_file():
             parser.error('patch file must exist; pass --patch with an overlay that supplies DSH credentials')
+        if not args.model_label:
+            route = overlay_model_route(args.patch)
+            if route:
+                args.model_label = f'{route[1]} / {route[0]}'
         if not args.cwd.is_dir():
             parser.error('working directory must exist; pass --cwd')
 
