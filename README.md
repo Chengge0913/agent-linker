@@ -1,5 +1,7 @@
 # Agent Linker
 
+简体中文 | [English](README.en.md)
+
 把任务派给**任意本地 agent**（通过 CLI；GUI 需要额外桥接），用一条 SQLite 队列做唯一事实来源：主控发布工单 → 执行端认领 → 回写报告与状态（`delivered` / `blocked`）。配套侧栏进度、事件流、中断恢复和验收清单。
 
 跨进程、跨终端：哪个 agent 在哪个窗口、哪个终端跑都不影响，队列是共享的。
